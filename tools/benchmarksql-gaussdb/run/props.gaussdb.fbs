@@ -1,0 +1,22 @@
+db=postgres
+driver=org.postgresql.Driver
+conn=jdbc:postgresql://DB_HOST_1:8000,DB_HOST_2:8000/presdb?prepareThreshold=1&batchMode=on&fetchsize=10
+user=preuser
+password=CHANGE_ME
+warehouses=100
+loadWorkers=10
+terminals=1000
+runTxnsPerTerminal=0
+runMins=10
+limitTxnsPerMin=0
+terminalWarehouseFixed=false
+newOrderWeight=45
+paymentWeight=43
+orderStatusWeight=4
+deliveryWeight=4
+stockLevelWeight=4
+resultDirectory=my_result_%tY-%tm-%td_%tH%tM%tS
+osCollectorScript=./misc/os_collector_linux.py
+osCollectorInterval=1
+#osCollectorSSHAddr=omm@DB_HOST
+osCollectorDevices=net_eth0 blk_sda

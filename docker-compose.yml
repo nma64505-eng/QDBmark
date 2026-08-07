@@ -1,0 +1,28 @@
+services:
+  mysql-bench-web:
+    build: .
+    container_name: mysql-bench-web
+    ports:
+      - "12365:12365"
+    restart: unless-stopped
+    environment:
+      - PORT=12365
+    volumes:
+      - ./data/reports:/app/data/reports
+      - ./data/uploads:/app/data/uploads
+      - ./data/artifacts:/app/data/artifacts
+      - ./data/settings:/app/data/settings
+    networks:
+      - qdbmark_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  qdbmark_net:
+    name: ${QDBMARK_DOCKER_NETWORK:-qdbmark_net}
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${QDBMARK_DOCKER_SUBNET:-10.245.0.0/24}
+          gateway: ${QDBMARK_DOCKER_GATEWAY:-10.245.0.1}

@@ -1,0 +1,19 @@
+<svg width="220" height="96" viewBox="0 0 220 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="220" height="96" rx="16" fill="white" fill-opacity="0.02"/>
+  <path d="M29 20L36 27L28 35L22 29L29 20Z" fill="#F26A2A"/>
+  <path d="M22 43L29 35L36 42L29 49L22 43Z" fill="#6B7280"/>
+  <path d="M29 49L36 56L29 63L22 56L29 49Z" fill="#6B7280"/>
+  <path d="M44 28L52 36L44 44L36 36L44 28Z" fill="#6B7280"/>
+  <path d="M44 44L52 52L44 60L36 52L44 44Z" fill="#6B7280"/>
+  <path d="M52 52L60 60L52 68L44 60L52 52Z" fill="#6B7280"/>
+  <path d="M58 36L66 44L58 52L50 44L58 36Z" fill="#6B7280"/>
+  <path d="M58 52L66 60L58 68L50 60L58 52Z" fill="#6B7280"/>
+  <path d="M74 26H83L88 42L94 26H103L92 57H84L74 26Z" fill="#6B7280"/>
+  <path d="M103 26H112V57H103V26Z" fill="#6B7280"/>
+  <path d="M116 26H124L137 43V26H146V57H138L125 40V57H116V26Z" fill="#6B7280"/>
+  <path d="M152 26H161V49H174V57H152V26Z" fill="#F26A2A"/>
+  <path d="M178 26H209V33H187V38H207V45H187V57H178V26Z" fill="#F26A2A"/>
+  <path d="M109 18H146" stroke="#F26A2A" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="146" y="39" fill="#F26A2A" font-family="Arial, sans-serif" font-size="22" font-weight="700">WOQU</text>
+  <text x="146" y="62" fill="#6B7280" font-family="Arial, sans-serif" font-size="22" font-weight="700">TECH</text>
+</svg>

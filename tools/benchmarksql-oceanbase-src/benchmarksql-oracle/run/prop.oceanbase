@@ -1,0 +1,37 @@
+db=oceanbase
+#driver=com.mysql.jdbc.Driver
+driver=com.oceanbase.jdbc.Driver
+conn=jdbc:oceanbase://245.0.3.5:2883/bctest?rewriteBatchedStatements=true&allowMultiQueries=true&useLocalSessionState=true&useUnicode=true&characterEncoding=utf-8&socketTimeout=30000000
+#conn=jdbc:oceanbase://245.0.0.10:2881,245.0.2.6:2881,245.0.1.47:2881/bctest?rewriteBatchedStatements=true&allowMultiQueries=true&useLocalSessionState=true&useUnicode=true&characterEncoding=utf-8&socketTimeout=30000000
+//请填写完整user信息
+#user=bctest@oraclet2#ob-662ca150
+user=bctest@oraclet2#ob-8a53e505
+password=CHANGE_ME
+warehouses=1000
+loadWorkers=40
+terminals=800
+database=bctest
+//To run specified transactions per terminal- runMins must equal zero
+runTxnsPerTerminal=0
+//To run for specified minutes- runTxnsPerTerminal must equal zero
+runMins=5
+//Number of total transactions per minute
+limitTxnsPerMin=0
+//Set to true to run in 4.x compatible mode. Set to false to use the
+//entire configured database evenly.
+terminalWarehouseFixed=true
+//The following five values must add up to 100
+//The default percentages of 45, 43, 4, 4 & 4 match the TPC-C spec
+newOrderWeight=45
+paymentWeight=43
+orderStatusWeight=4
+deliveryWeight=4
+stockLevelWeight=4
+// Directory name to create for collecting detailed result data.
+// Comment this out to suppress.
+resultDirectory=my_result_%tY-%tm-%td_%tH%tM%tS
+osCollectorScript=./misc/os_collector_linux.py
+osCollectorInterval=1
+//osCollectorSSHAddr=user@dbhost
+//osCollectorDevices=net_eth0 blk_sda
+
