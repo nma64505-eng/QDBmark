@@ -322,6 +322,7 @@ def build_config_from_payload(payload: Dict[str, Any]) -> BenchmarkConfig:
         kafka_replication_factor=int(payload.get("kafka_replication_factor", 1) or 1),
         es_pipeline=str(payload.get("es_pipeline", "benchmark-only")).strip() or "benchmark-only",
         es_challenge=str(payload.get("es_challenge", "")).strip(),
+        es_ingest_percentage=float(payload.get("es_ingest_percentage", 100) or 100),
         es_track_params=str(payload.get("es_track_params", "")).strip(),
         gaussdb_architecture=str(payload.get("gaussdb_architecture", "centralized")).strip().lower() or "centralized",
         gaussdb_cn_hosts=str(payload.get("gaussdb_cn_hosts", "")).strip(),

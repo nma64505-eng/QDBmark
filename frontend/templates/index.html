@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='qfusion-mark.png') }}?v=20260520-favicon" />
     <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='qfusion-mark.png') }}?v=20260520-favicon" />
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='qfusion-mark.png') }}?v=20260520-favicon" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260630-help-text-center" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=20260915-runtime-chart-light" />
   </head>
   <body>
     <main class="shell">
@@ -492,7 +492,11 @@
                   </label>
                   <label class="hidden elasticsearch-only task-config-span-2">
                     <span>Track 参数</span>
-                    <input name="es_track_params" value="" placeholder="例如：bulk_size:5000,index_settings.number_of_replicas:0" />
+                    <input name="es_track_params" value="" placeholder="例如：include_force_merge:false,index_settings.number_of_replicas:0" />
+                  </label>
+                  <label class="hidden elasticsearch-only">
+                    <span>数据灌入比例(%)</span>
+                    <input name="es_ingest_percentage" type="number" value="100" min="0.0001" max="100" step="0.0001" required />
                   </label>
                   <label class="hidden kafka-only">
                     <span>acks</span>
@@ -978,7 +982,11 @@
                     </label>
                     <label class="task-config-elasticsearch task-config-span-2">
                       <span>Track 参数</span>
-                      <input id="task-config-es-track-params" type="text" placeholder="例如：bulk_size:5000,index_settings.number_of_replicas:0" />
+                      <input id="task-config-es-track-params" type="text" placeholder="例如：include_force_merge:false,index_settings.number_of_replicas:0" />
+                    </label>
+                    <label class="task-config-elasticsearch">
+                      <span>数据灌入比例(%)</span>
+                      <input id="task-config-es-ingest-percentage" type="number" min="0.0001" max="100" step="0.0001" />
                     </label>
                     <label class="task-config-kafka">
                       <span>Kafka acks</span>
@@ -1288,6 +1296,7 @@
       const taskConfigAutoCleanupInput = document.getElementById("task-config-auto-cleanup");
       const taskConfigEsPipelineInput = document.getElementById("task-config-es-pipeline");
       const taskConfigEsChallengeInput = document.getElementById("task-config-es-challenge");
+      const taskConfigEsIngestPercentageInput = document.getElementById("task-config-es-ingest-percentage");
       const taskConfigEsTrackParamsInput = document.getElementById("task-config-es-track-params");
       const taskConfigGaussDbArchitectureInput = document.getElementById("task-config-gaussdb-architecture");
       const taskConfigGaussDbCnHostsInput = document.getElementById("task-config-gaussdb-cn-hosts");
@@ -1361,6 +1370,7 @@
       const oracleEngineSelect = document.querySelector('select[name="oracle_engine"]');
       const esPipelineInput = document.querySelector('select[name="es_pipeline"]');
       const esChallengeInput = document.querySelector('input[name="es_challenge"]');
+      const esIngestPercentageInput = document.querySelector('input[name="es_ingest_percentage"]');
       const esTrackParamsInput = document.querySelector('input[name="es_track_params"]');
       const obTenantNameInput = document.querySelector('input[name="ob_tenant_name"]');
       const prometheusUrlInput = document.querySelector('input[name="prometheus_url"]');
@@ -1906,6 +1916,7 @@
         "extra_options",
         "es_pipeline",
         "es_challenge",
+        "es_ingest_percentage",
         "es_track_params",
         "dm_apply_tuning",
         "ob_apply_tuning",
@@ -1976,6 +1987,7 @@
         table_size:
           "数据规模参数。MySQL / TiDB(sysbench) 与 PostgreSQL/OpenGauss/Vastbase(sysbench) 表示单表行数；SQL Server / Oracle HammerDB / DM/OceanBase/KingBase/GaussDB/TiDB BenchmarkSQL 表示仓库数；TiUP TPC-C 也表示 warehouses；MongoDB 表示 YCSB recordcount；PostgreSQL/Vastbase(pgbench) 表示 scale。MySQL/TiDB sysbench 建议值可参考：4C8G 单表行数 130000；8C16G 单表行数 260000；16C64G 单表行数 1050000。SQL Server 手册示例 8C16G 使用 80 仓库，DM 文档默认 200 仓，OceanBase 手册默认 3000 仓，KingBase 手册示例 100 仓。",
         operation_count: "MongoDB 表示 YCSB operationcount；Redis 表示 redis-benchmark 请求总数(-n)，手册推荐 5000000。",
+        es_ingest_percentage: "Rally 官方 ingest_percentage 参数，控制写入 track 完整语料的比例。100 表示全部语料。",
         pgbench_jobs: "pgbench 工作线程数，对应 `-j`。文档示例使用 16，通常不需要高于客户端数。",
         pgbench_fillfactor: "pgbench 初始化填充因子，对应 `-F`。文档建议 80，可适度提升 update 场景性能。",
         pgbench_latency_limit: "pgbench 单事务延迟门限，对应 `-L`，单位毫秒。超过门限的事务会被统计为 late，适合观察尾延迟压力。",
@@ -2220,6 +2232,8 @@
             "ElasticSearch Rally 并发客户端列表，会写入 track-params 的 bulk_indexing_clients 并逐组执行 race。多个值用英文逗号分隔，例如 4,8,16。",
           duration_seconds:
             "Rally track 的实际执行时长由 challenge schedule 决定；该字段用于报告记录和超时时间估算。",
+          es_ingest_percentage:
+            "按 Rally 官方 ingest_percentage 控制写入比例。100 表示完整语料；geonames 的 1% 约为 113,965 条文档。Track 参数中显式填写 ingest_percentage 时，以高级参数为准。",
           table_size:
             "ElasticSearch bulk size，对应 track-params 中的 bulk_size。不同 track 是否使用该参数取决于官方 Rally track 定义。",
           extra_options:
@@ -3466,6 +3480,7 @@
           auto_cleanup: taskConfigAutoCleanupInput ? taskConfigAutoCleanupInput.checked : false,
           es_pipeline: taskConfigEsPipelineInput ? taskConfigEsPipelineInput.value : "benchmark-only",
           es_challenge: taskConfigEsChallengeInput ? taskConfigEsChallengeInput.value.trim() : "",
+          es_ingest_percentage: taskConfigEsIngestPercentageInput ? taskConfigEsIngestPercentageInput.value.trim() : "100",
           es_track_params: taskConfigEsTrackParamsInput ? taskConfigEsTrackParamsInput.value.trim() : "",
           kafka_acks: taskConfigKafkaAcksInput ? taskConfigKafkaAcksInput.value : "1",
           kafka_throughput: taskConfigKafkaThroughputInput ? taskConfigKafkaThroughputInput.value.trim() : "-1",
@@ -3547,6 +3562,7 @@
         if (taskConfigAutoCleanupInput) taskConfigAutoCleanupInput.checked = editableConfig.auto_cleanup === true || String(editableConfig.auto_cleanup) === "true";
         if (taskConfigEsPipelineInput) taskConfigEsPipelineInput.value = editableConfig.es_pipeline || "benchmark-only";
         if (taskConfigEsChallengeInput) taskConfigEsChallengeInput.value = editableConfig.es_challenge || "";
+        if (taskConfigEsIngestPercentageInput) taskConfigEsIngestPercentageInput.value = editableConfig.es_ingest_percentage || "100";
         if (taskConfigEsTrackParamsInput) taskConfigEsTrackParamsInput.value = editableConfig.es_track_params || "";
         if (taskConfigKafkaAcksInput) taskConfigKafkaAcksInput.value = editableConfig.kafka_acks || "1";
         if (taskConfigKafkaThroughputInput) taskConfigKafkaThroughputInput.value = editableConfig.kafka_throughput ?? "-1";
@@ -5411,6 +5427,7 @@
         if (gaussdbConnParamsInput) gaussdbConnParamsInput.value = "prepareThreshold=1&batchMode=on&fetchsize=10";
         if (esPipelineInput) esPipelineInput.value = "benchmark-only";
         if (esChallengeInput) esChallengeInput.value = "";
+        if (esIngestPercentageInput) esIngestPercentageInput.value = "100";
         if (esTrackParamsInput) esTrackParamsInput.value = "";
         if (concurrencyValuesInput) concurrencyValuesInput.value = "25";
         const durationField = fieldByName("duration_seconds");

@@ -5,6 +5,7 @@ import json
 import os
 import ipaddress
 import re
+import signal
 import shlex
 import socket
 import ssl
@@ -690,6 +691,7 @@ class BenchmarkConfig:
     kafka_replication_factor: int = 1
     es_pipeline: str = "benchmark-only"
     es_challenge: str = ""
+    es_ingest_percentage: float = 100.0
     es_track_params: str = ""
     gaussdb_architecture: str = "centralized"
     gaussdb_cn_hosts: str = ""
@@ -961,6 +963,8 @@ class BenchmarkConfig:
             raise BenchmarkValidationError("ElasticSearch 当前仅支持 Rally benchmark-only pipeline。")
         if self.es_challenge and not re.match(r"^[A-Za-z0-9_.:-]+$", self.es_challenge):
             raise BenchmarkValidationError("ElasticSearch challenge 仅支持字母、数字、点、冒号、下划线和中划线。")
+        if not 0 < self.es_ingest_percentage <= 100:
+            raise BenchmarkValidationError("ElasticSearch 数据灌入比例必须大于 0 且不超过 100%。")
         if self.table_size <= 0:
             raise BenchmarkValidationError("ElasticSearch bulk size 必须大于 0。")
         if self.report_interval <= 0:
@@ -5410,6 +5414,7 @@ def _run_command(
     cancel_callback: Optional[CancelCallback] = None,
     env: Optional[Dict[str, str]] = None,
     cwd: Optional[str] = None,
+    progress_callback: Optional[Callable[[], None]] = None,
 ) -> str:
     _check_cancel(cancel_callback)
     _emit_log(log_callback, f"{log_label}启动: {_masked_command(command, secrets or [])}")
@@ -5421,7 +5426,26 @@ def _run_command(
         bufsize=1,
         env={**os.environ, **env} if env else None,
         cwd=cwd,
+        start_new_session=(os.name == "posix"),
     )
+
+    def _stop_process_tree() -> None:
+        if process.poll() is not None:
+            return
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGTERM)
+            else:
+                process.terminate()
+            process.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            except OSError:
+                pass
 
     lines: List[str] = []
     queue: Queue[str] = Queue()
@@ -5437,16 +5461,24 @@ def _run_command(
     reader = Thread(target=_reader, daemon=True)
     reader.start()
     deadline = monotonic() + timeout_seconds
+    next_progress_poll = monotonic()
 
     while True:
         if cancel_callback and cancel_callback():
-            process.kill()
+            _stop_process_tree()
             reader.join(timeout=1)
             raise BenchmarkCancelledError("测试已终止。")
         if monotonic() > deadline:
-            process.kill()
+            _stop_process_tree()
             reader.join(timeout=1)
             raise BenchmarkValidationError(f"{log_label}执行超时，超过 {timeout_seconds} 秒。")
+
+        if progress_callback and monotonic() >= next_progress_poll:
+            try:
+                progress_callback()
+            except (OSError, UnicodeError):
+                pass
+            next_progress_poll = monotonic() + 0.5
 
         try:
             line = queue.get(timeout=0.2)
@@ -5459,6 +5491,11 @@ def _run_command(
         if process.poll() is not None and queue.empty():
             break
 
+    if progress_callback:
+        try:
+            progress_callback()
+        except (OSError, UnicodeError):
+            pass
     reader.join(timeout=1)
     return_code = process.wait()
     output = "\n".join(line for line in lines if line).strip()
@@ -7293,6 +7330,8 @@ def _merge_es_track_params(config: BenchmarkConfig, concurrency: int) -> str:
                 continue
             params[key.strip()] = value.strip()
     params["bulk_indexing_clients"] = str(concurrency)
+    if "ingest_percentage" not in params:
+        params["ingest_percentage"] = f"{config.es_ingest_percentage:g}"
     if config.table_size > 0 and "bulk_size" not in params:
         params["bulk_size"] = str(config.table_size)
     return ",".join(f"{key}:{value}" for key, value in params.items())
@@ -7318,6 +7357,67 @@ def _build_esrally_command(config: BenchmarkConfig, concurrency: int, report_fil
     if config.extra_options.strip():
         command.extend(shlex.split(config.extra_options))
     return command
+
+
+def _elasticsearch_rally_timeout_seconds(config: BenchmarkConfig) -> int:
+    """Allow a complete Rally track to finish, including long force merges.
+
+    Rally's official tracks are corpus based rather than bounded by QDBmark's
+    duration setting. For example, geonames imports roughly 11.4 million
+    documents and permits a single force-merge request to run for two hours.
+    Keep the outer watchdog comfortably above that limit so QDBmark does not
+    terminate an otherwise healthy race before Rally can write its report.
+    """
+    return max(4 * 3600, int(config.duration_seconds or 0) + 3 * 3600)
+
+
+def _elasticsearch_rally_progress_callback(
+    log_path: Path,
+    start_offset: int,
+    log_callback: Optional[LogCallback],
+) -> Callable[[], None]:
+    """Forward Rally task transitions from its internal log to the job log."""
+    state: Dict[str, Any] = {
+        "offset": max(0, start_offset),
+        "last_finished_task": "",
+        "last_finished_seconds": None,
+    }
+    task_pattern = re.compile(r"executing tasks: \['([^']+)'\]")
+    finished_pattern = re.compile(r"finished executing tasks \['([^']+)'\] in ([\d.]+) seconds")
+    progress_pattern = re.compile(r"join point \[(\d+)/(\d+)\]")
+
+    def _poll() -> None:
+        if not log_path.exists():
+            return
+        file_size = log_path.stat().st_size
+        if file_size < state["offset"]:
+            state["offset"] = 0
+        with log_path.open("r", encoding="utf-8", errors="replace") as fp:
+            fp.seek(state["offset"])
+            for line in fp:
+                finished_match = finished_pattern.search(line)
+                if finished_match:
+                    state["last_finished_task"] = finished_match.group(1)
+                    state["last_finished_seconds"] = float(finished_match.group(2))
+                    continue
+
+                progress_match = progress_pattern.search(line)
+                if progress_match:
+                    current, total = progress_match.groups()
+                    task = state["last_finished_task"] or "当前步骤"
+                    elapsed = state["last_finished_seconds"]
+                    elapsed_text = f"，耗时 {elapsed:.2f} 秒" if elapsed is not None else ""
+                    _emit_log(log_callback, f"[Rally进度] {current}/{total}: {task} 已完成{elapsed_text}")
+                    state["last_finished_task"] = ""
+                    state["last_finished_seconds"] = None
+                    continue
+
+                task_match = task_pattern.search(line)
+                if task_match:
+                    _emit_log(log_callback, f"[Rally步骤] 开始执行: {task_match.group(1)}")
+            state["offset"] = fp.tell()
+
+    return _poll
 
 
 def _parse_esrally_csv_report(report_file: Path) -> dict[str, Any]:
@@ -7405,21 +7505,34 @@ def _run_elasticsearch_benchmark(
     _check_elasticsearch_connectivity(config, log_callback=log_callback)
     artifact_dir = Path(config.artifact_dir or tempfile.mkdtemp(prefix="esrally-"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    rally_timeout_seconds = _elasticsearch_rally_timeout_seconds(config)
+    _emit_log(
+        log_callback,
+        "Rally 按 track 完整语料执行；持续时间参数不限制完整 track 总耗时。"
+        f"本次外层保护超时为 {rally_timeout_seconds} 秒，以覆盖数据导入、force merge 和查询阶段。",
+    )
     results: list[ConcurrencyResult] = []
     for concurrency in sorted(set(config.threads_values)):
         _check_cancel(cancel_callback)
         report_file = artifact_dir / f"esrally_{concurrency}.csv"
         command = _build_esrally_command(config, concurrency, report_file)
+        rally_log_path = Path.home() / ".rally" / "logs" / "rally.log"
+        rally_log_offset = rally_log_path.stat().st_size if rally_log_path.exists() else 0
+        progress_callback = _elasticsearch_rally_progress_callback(
+            rally_log_path,
+            rally_log_offset,
+            log_callback,
+        )
         _emit_log(log_callback, f"并发 {concurrency}: 开始执行 Elastic Rally race...")
         output = _run_command(
             command,
-            timeout_seconds=max(3600, config.duration_seconds + 3600),
+            timeout_seconds=rally_timeout_seconds,
             log_callback=log_callback,
             log_prefix=f"[esrally:{concurrency}] ",
             log_label=f"{concurrency}并发Elastic Rally测试",
             secrets=[config.password],
             cancel_callback=cancel_callback,
-            env={"ESRALLY_HOME": str(artifact_dir / "rally-home")},
+            progress_callback=progress_callback,
         )
         result = _parse_esrally_output(concurrency, output, report_file, config)
         results.append(result)
@@ -7455,6 +7568,7 @@ def _run_elasticsearch_benchmark(
             "es_pipeline": config.es_pipeline,
             "es_track": config.workload,
             "es_challenge": config.es_challenge,
+            "es_ingest_percentage": config.es_ingest_percentage,
             "es_track_params": config.es_track_params,
         },
         results=results,

@@ -574,6 +574,7 @@ def _editable_config_from_payload(payload: Dict[str, Any]) -> Dict[str, str]:
         "fio_read_percent": str(config.fio_read_percent),
         "es_pipeline": config.es_pipeline,
         "es_challenge": config.es_challenge,
+        "es_ingest_percentage": str(config.es_ingest_percentage),
         "es_track_params": config.es_track_params,
         "gaussdb_architecture": config.gaussdb_architecture,
         "gaussdb_cn_hosts": config.gaussdb_cn_hosts,
@@ -715,6 +716,7 @@ def _connection_info_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         add("DB Index", _payload_value(payload, "db_name"))
     elif db_type == "ElasticSearch":
         add("Rally track", _payload_value(payload, "workload"))
+        add("数据灌入比例", f"{_payload_value(payload, 'es_ingest_percentage') or '100'}%")
     else:
         add("数据库名", _payload_value(payload, "db_name"))
 
@@ -1784,6 +1786,7 @@ def update_task_config(job_id: str) -> Any:
         "fio_read_percent",
         "es_pipeline",
         "es_challenge",
+        "es_ingest_percentage",
         "es_track_params",
         "gaussdb_architecture",
         "gaussdb_cn_hosts",
