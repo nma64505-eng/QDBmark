@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IMAGE_REPO="qfusion-db-benchmark-platform"
-IMAGE_VERSION="20260422"
+IMAGE_VERSION="2.3"
 CONTAINER_NAME="mysql-bench-web"
 HOST_PORT="${HOST_PORT:-12365}"
 CONTAINER_PORT="12365"

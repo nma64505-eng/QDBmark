@@ -1,5 +1,11 @@
 # QDBmark
 
+Current release: **v2.3**
+
+The v2.3 runtime image includes Git 2.x for Elasticsearch Rally. Rally's
+official track repositories require Git 1.9 or newer, while the CentOS 7 base
+image only provides Git 1.8.3 by default.
+
 QDBmark is a database and middleware benchmark platform. It provides a web UI for creating benchmark tasks, running connectivity checks, collecting Prometheus/container metrics, and exporting performance reports.
 
 ## Supported Targets

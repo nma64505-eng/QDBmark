@@ -116,23 +116,25 @@ RUN set -eux; \
     printf '%s\n' \
       '[mariadb]' \
       'name=MariaDB 10.11' \
-      'baseurl=https://rpm.mariadb.org/10.11/centos7-amd64' \
+      'baseurl=https://archive.mariadb.org/mariadb-10.11.13/yum/centos7-amd64/' \
       'enabled=1' \
       'gpgcheck=0' \
       >/etc/yum.repos.d/mariadb.repo; \
     printf '%s\n' '[main]' 'enabled=0' >/etc/yum/pluginconf.d/fastestmirror.conf; \
     yum clean all; \
+    yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm; \
     ACCEPT_EULA=Y yum install -y \
-      sysbench MariaDB-common MariaDB-compat fio redis libreoffice-writer wqy-microhei-fonts openssh-clients sshpass \
+      git sysbench MariaDB-common MariaDB-compat fio redis libreoffice-writer wqy-microhei-fonts openssh-clients sshpass \
       java-1.8.0-openjdk-devel java-11-openjdk-devel ant ca-certificates tar postgresql postgresql-contrib \
       curl unzip unixODBC libiodbc libaio findutils which msodbcsql17; \
+    git --version | grep -Eq '^git version ([2-9]|[1-9][0-9]+)\.'; \
     yum clean all; \
     test -f /usr/lib64/mysql/plugin/caching_sha2_password.so; \
     rm -rf /var/cache/yum; \
     curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-py310_24.7.1-0-Linux-x86_64.sh -o /tmp/miniconda.sh; \
     bash /tmp/miniconda.sh -b -p /opt/conda; \
     rm -f /tmp/miniconda.sh; \
-    /opt/conda/bin/python -m pip install --upgrade 'pip<26'; \
+    /opt/conda/bin/python -m pip install --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=300 --retries=10 'pip<26'; \
     if [ -f /tmp/hammerdb-cache/HammerDB-4.0-Linux.tar.gz ]; then \
       cp /tmp/hammerdb-cache/HammerDB-4.0-Linux.tar.gz /tmp/hammerdb.tar.gz; \
     else \
@@ -199,9 +201,10 @@ RUN set -eux; \
     test -n "$(find -L /opt/oracle/instantclient/lib -maxdepth 1 -name 'libclntsh.so*' -print -quit)"; \
     /opt/conda/bin/pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=120 -r requirements.txt; \
     /opt/conda/bin/python -m venv /opt/esrally-venv; \
-    /opt/esrally-venv/bin/pip install --upgrade 'pip<26'; \
+    /opt/esrally-venv/bin/pip install --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=300 --retries=10 'pip<26'; \
     for attempt in 1 2 3; do \
-      /opt/esrally-venv/bin/pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=300 --retries=10 esrally==2.13.0 && break; \
+      /opt/esrally-venv/bin/pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=300 --retries=10 \
+        cryptography==45.0.7 virtualenv==20.33.1 esrally==2.13.0 && break; \
       sleep $((attempt * 10)); \
     done
 
@@ -225,13 +228,14 @@ RUN set -eux; \
     KAFKA_DOWNLOAD_VERSION="3.9.2"; \
     KAFKA_TGZ="kafka_${KAFKA_SCALA_VERSION}-${KAFKA_DOWNLOAD_VERSION}.tgz"; \
     for base_url in \
+      "https://mirror.dotsrc.org/mirrors/apache/kafka/${KAFKA_DOWNLOAD_VERSION}" \
       "https://mirrors.aliyun.com/apache/kafka/${KAFKA_DOWNLOAD_VERSION}" \
       "https://mirrors.tuna.tsinghua.edu.cn/apache/kafka/${KAFKA_DOWNLOAD_VERSION}" \
       "https://downloads.apache.org/kafka/${KAFKA_DOWNLOAD_VERSION}" \
       "https://archive.apache.org/dist/kafka/${KAFKA_DOWNLOAD_VERSION}"; do \
       for attempt in 1 2 3; do \
         rm -f /tmp/kafka.tgz; \
-        curl -fL --connect-timeout 20 --speed-time 20 --speed-limit 102400 --retry 2 --retry-delay 3 "${base_url}/${KAFKA_TGZ}" -o /tmp/kafka.tgz && break 2; \
+        curl -4 -fL --connect-timeout 20 --speed-time 20 --speed-limit 102400 --retry 2 --retry-delay 3 "${base_url}/${KAFKA_TGZ}" -o /tmp/kafka.tgz && break 2; \
         sleep $((attempt * 3)); \
       done; \
     done; \
@@ -246,13 +250,14 @@ RUN set -eux; \
     ROCKETMQ_DOWNLOAD_VERSION="${ROCKETMQ_VERSION:-5.5.0}"; \
     ROCKETMQ_ZIP="rocketmq-all-${ROCKETMQ_DOWNLOAD_VERSION}-bin-release.zip"; \
     for base_url in \
+      "https://mirror.dotsrc.org/mirrors/apache/rocketmq/${ROCKETMQ_DOWNLOAD_VERSION}" \
       "https://mirrors.aliyun.com/apache/rocketmq/${ROCKETMQ_DOWNLOAD_VERSION}" \
       "https://mirrors.tuna.tsinghua.edu.cn/apache/rocketmq/${ROCKETMQ_DOWNLOAD_VERSION}" \
       "https://downloads.apache.org/rocketmq/${ROCKETMQ_DOWNLOAD_VERSION}" \
       "https://archive.apache.org/dist/rocketmq/${ROCKETMQ_DOWNLOAD_VERSION}"; do \
       for attempt in 1 2 3; do \
         rm -f /tmp/rocketmq.zip; \
-        curl -fL --connect-timeout 20 --speed-time 20 --speed-limit 102400 --retry 2 --retry-delay 3 "${base_url}/${ROCKETMQ_ZIP}" -o /tmp/rocketmq.zip && break 2; \
+        curl -4 -fL --connect-timeout 20 --speed-time 20 --speed-limit 102400 --retry 2 --retry-delay 3 "${base_url}/${ROCKETMQ_ZIP}" -o /tmp/rocketmq.zip && break 2; \
         sleep $((attempt * 3)); \
       done; \
     done; \
